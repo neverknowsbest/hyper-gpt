@@ -1,0 +1,31 @@
+{
+  "name": "hypergpt",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:backend": "bun --watch backend/server.ts",
+    "dev:frontend": "vite",
+    "dev": "concurrently -k -n backend,frontend -c blue,green \"bun run dev:backend\" \"bun run dev:frontend\"",
+    "build": "vite build",
+    "start": "bun backend/server.ts",
+    "db:generate": "drizzle-kit generate",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
+    "drizzle-orm": "^0.36.4",
+    "hono": "^4.6.12",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "drizzle-kit": "^0.28.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}

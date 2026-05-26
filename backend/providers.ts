@@ -1,0 +1,101 @@
+import Anthropic from "@anthropic-ai/sdk";
+import type {
+  ContentPart,
+  MessageRole,
+  ProviderId,
+} from "../shared/types";
+
+export interface ProviderMessage {
+  role: MessageRole;
+  content: ContentPart[];
+}
+
+export type ProviderStreamChunk =
+  | { type: "content_delta"; delta: ContentPart }
+  | { type: "complete" }
+  | { type: "error"; error: { code: string; message: string } };
+
+export interface StreamChatInput {
+  apiKey: string;
+  model: string;
+  messages: ProviderMessage[];
+}
+
+export interface ModelProvider {
+  id: ProviderId;
+  streamChat(input: StreamChatInput): AsyncIterable<ProviderStreamChunk>;
+}
+
+// --- Anthropic ---
+
+const ANTHROPIC_MAX_TOKENS = 4096;
+
+async function* anthropicStream(
+  input: StreamChatInput,
+): AsyncIterable<ProviderStreamChunk> {
+  const client = new Anthropic({ apiKey: input.apiKey });
+
+  try {
+    const stream = client.messages.stream({
+      model: input.model,
+      max_tokens: ANTHROPIC_MAX_TOKENS,
+      messages: input.messages.map((m) => ({
+        role: m.role,
+        content: m.content.map((p) => ({ type: "text", text: p.text })),
+      })),
+    });
+
+    for await (const event of stream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
+        yield {
+          type: "content_delta",
+          delta: { type: "text", text: event.delta.text },
+        };
+      }
+    }
+
+    yield { type: "complete" };
+  } catch (e) {
+    const err = e as Error & { status?: number; error?: { type?: string } };
+    const code =
+      err.status === 401 || err.status === 403
+        ? "auth"
+        : err.status === 429
+          ? "rate_limit"
+          : err.error?.type === "invalid_request_error" &&
+              err.message?.includes("max_tokens")
+            ? "context_too_long"
+            : "unknown";
+    yield {
+      type: "error",
+      error: { code, message: err.message ?? String(e) },
+    };
+  }
+}
+
+export const anthropicProvider: ModelProvider = {
+  id: "anthropic",
+  streamChat: (input) => anthropicStream(input),
+};
+
+// --- Registry ---
+
+const providers: Record<ProviderId, ModelProvider> = {
+  anthropic: anthropicProvider,
+  // openai: TBD
+  openai: anthropicProvider, // placeholder to satisfy the type until we implement OpenAI
+};
+
+export function getProvider(id: ProviderId): ModelProvider {
+  const p = providers[id];
+  if (!p) throw new Error(`Unknown provider: ${id}`);
+  if (id === "openai") {
+    throw new Error(
+      "OpenAI provider not yet implemented. Use 'anthropic' for now.",
+    );
+  }
+  return p;
+}
