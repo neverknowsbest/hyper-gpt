@@ -35,14 +35,35 @@ async function* anthropicStream(
 ): AsyncIterable<ProviderStreamChunk> {
   const client = new Anthropic({ apiKey: input.apiKey });
 
+  // Mark the last content block of the last assistant message with
+  // cache_control so Anthropic caches the prefix up through that turn.
+  // Subsequent requests with a longer history will set a new marker further
+  // along; Anthropic's longest-prefix match reuses the prior cache.
+  // First turns (no assistant message yet) skip caching.
+  let lastAssistantIdx = -1;
+  for (let i = input.messages.length - 1; i >= 0; i--) {
+    if (input.messages[i].role === "assistant") {
+      lastAssistantIdx = i;
+      break;
+    }
+  }
+
+  const anthropicMessages = input.messages.map((m, mi) => ({
+    role: m.role,
+    content: m.content.map((p, pi) => {
+      const block: Anthropic.TextBlockParam = { type: "text", text: p.text };
+      if (mi === lastAssistantIdx && pi === m.content.length - 1) {
+        block.cache_control = { type: "ephemeral" };
+      }
+      return block;
+    }),
+  }));
+
   try {
     const stream = client.messages.stream({
       model: input.model,
       max_tokens: ANTHROPIC_MAX_TOKENS,
-      messages: input.messages.map((m) => ({
-        role: m.role,
-        content: m.content.map((p) => ({ type: "text", text: p.text })),
-      })),
+      messages: anthropicMessages,
     });
 
     for await (const event of stream) {

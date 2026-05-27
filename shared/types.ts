@@ -102,3 +102,23 @@ export interface GetNodeResponse {
   inboundEdge: Edge | null;
   outboundEdges: Edge[];
 }
+
+export interface GetCanvasResponse {
+  canvas: Canvas;
+  nodes: Node[];
+  edges: Edge[];
+}
+
+export interface SpawnRequest {
+  sourceNodeId: string;
+  sourceMessageId: string;
+  citation: { start: number; end: number; text: string };
+  firstUserMessage: ContentPart[];
+}
+
+export interface SpawnResponse {
+  node: Node;
+  edge: Edge;
+  userMessage: Message;
+  assistantMessageId: string;
+}

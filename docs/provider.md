@@ -66,15 +66,26 @@ The provider doesn't know about Canvas / Node / Edge / Message rows. It doesn't 
 
 ### Anthropic
 
-- Uses the Messages API (`POST https://api.anthropic.com/v1/messages`).
-- Auth: `x-api-key: <key>` header.
+- Uses the Messages API (`POST https://api.anthropic.com/v1/messages`) via the official `@anthropic-ai/sdk`.
+- Auth: `x-api-key: <key>` header (handled by the SDK).
 - Streaming: SSE with event types `message_start`, `content_block_delta`, `message_stop`, etc.
 - Mapping:
   - `ProviderMessage` → Anthropic `messages[]` array (1:1; both use role + content-parts).
   - `content_block_delta` (text) → `ProviderStreamChunk { type: "content_delta", delta: { type: "text", text } }`.
   - `message_stop` → `ProviderStreamChunk { type: "complete" }`.
   - Any Anthropic error event → `ProviderStreamChunk { type: "error", error: ... }`.
-- v1 catalog: `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`. (The Anthropic model list is the source of truth; this is just what the settings UI offers.)
+- v1 catalog: `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`. (The Anthropic model list is the source of truth; this is just what the settings UI offers.) Default is `claude-sonnet-4-6` for cost-vs-quality balance; Opus is available as a per-canvas or per-node override.
+
+**Prompt caching.** The Anthropic adapter marks the last content block of the last assistant message in the request with `cache_control: { type: "ephemeral" }`. This caches the conversation prefix up through that turn (5-minute TTL). The next turn's request sets a new marker further along, and Anthropic's longest-prefix match reuses the prior cache automatically. First turns (no assistant message yet) skip caching.
+
+Why this matters for HyperGPT specifically:
+- **Linear chat growth** re-sends history on every turn — the classic case for prompt caching. Each follow-up pays full input rate only on the new tokens; the rest are 10% cache reads.
+- **Spawned tangents reuse parent context.** When spawning multiple tangents from the same parent within a few minutes, every spawn after the first hits the cached parent prefix. This is the access pattern caching was designed for.
+
+Costs to know:
+- Cache writes are 25% more than regular input (only matters if the prefix is never reused, which our access pattern avoids).
+- Minimum 1024 tokens to be cacheable, so short conversations get no benefit either way.
+- Default 5-minute TTL is fine for burst patterns; 1-hour TTL is available at higher write cost but not used in v1.
 
 ### OpenAI
 
@@ -168,7 +179,7 @@ No retries in v1. The user retries by sending the message again (or by waiting a
 - **Tool use** (web search, code execution). Future-features; the message parts schema is ready for it (`type: "tool_use"`, `type: "tool_result"`), but no v1 plumbing.
 - **Image inputs.** Same — schema-ready, no UX or transport.
 - **Per-message sampling parameters** (temperature, top_p, etc.). v1 uses provider defaults. If we want them later, they live as optional fields on `streamChat`'s input.
-- **Token usage tracking / cost reporting.** Worth thinking about for a hosted future; v1 ignores it.
+- **Token usage tracking / cost reporting.** See [future-features.md](./future-features.md#token-usage-and-cost-tracking) — would enable cache-hit verification and per-canvas cost display.
 - **Provider-specific features** (Anthropic's prompt caching, OpenAI's response format JSON mode). Don't expose them through the abstraction — that defeats the abstraction.
 
 ## Open questions

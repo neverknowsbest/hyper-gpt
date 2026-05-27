@@ -2,10 +2,13 @@ import type {
   Canvas,
   CreateCanvasRequest,
   CreateCanvasResponse,
+  GetCanvasResponse,
   GetNodeResponse,
   Message,
   SendMessageRequest,
   SendMessageResponse,
+  SpawnRequest,
+  SpawnResponse,
   StreamEvent,
 } from "../../../shared/types";
 
@@ -40,6 +43,13 @@ export async function listCanvases(userId: string): Promise<Canvas[]> {
   return jsonFetch(`/api/users/${userId}/canvases`);
 }
 
+export async function getCanvas(
+  userId: string,
+  canvasId: string,
+): Promise<GetCanvasResponse> {
+  return jsonFetch(`/api/users/${userId}/canvases/${canvasId}`);
+}
+
 export async function createCanvas(
   userId: string,
   input: CreateCanvasRequest,
@@ -63,6 +73,16 @@ export async function sendMessage(
   input: SendMessageRequest,
 ): Promise<SendMessageResponse> {
   return jsonFetch(`/api/users/${userId}/nodes/${nodeId}/messages`, {
+    method: "POST",
+    body: input,
+  });
+}
+
+export async function spawn(
+  userId: string,
+  input: SpawnRequest,
+): Promise<SpawnResponse> {
+  return jsonFetch(`/api/users/${userId}/spawn`, {
     method: "POST",
     body: input,
   });

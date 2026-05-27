@@ -7,7 +7,9 @@ import { canvases, nodes, messages, edges } from "./db/schema";
 import {
   createCanvas,
   sendUserMessage,
+  spawnNode,
   listCanvases,
+  getCanvasStructure,
   getNodeWithMessages,
   buildReplayEvents,
 } from "./orchestrator";
@@ -15,6 +17,7 @@ import { streamHub } from "./streaming";
 import type {
   CreateCanvasRequest,
   SendMessageRequest,
+  SpawnRequest,
   StreamEvent,
 } from "../shared/types";
 
@@ -52,6 +55,17 @@ function assertLocalUser(userIdParam: string): void {
 app.get("/api/users/:userId/canvases", (c) => {
   assertLocalUser(c.req.param("userId"));
   return c.json(listCanvases(localUser.id));
+});
+
+app.get("/api/users/:userId/canvases/:canvasId", (c) => {
+  assertLocalUser(c.req.param("userId"));
+  const canvasId = c.req.param("canvasId");
+  const data = getCanvasStructure(canvasId);
+  if (!data) return c.json({ error: "Not found" }, 404);
+  if (data.canvas.userId !== localUser.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  return c.json(data);
 });
 
 app.post("/api/users/:userId/canvases", async (c) => {
@@ -94,6 +108,18 @@ app.post("/api/users/:userId/nodes/:nodeId/messages", async (c) => {
   const body = (await c.req.json()) as SendMessageRequest;
   const result = sendUserMessage(localUser.id, nodeId, body.content);
   return c.json({
+    userMessage: result.userMessage,
+    assistantMessageId: result.assistantMessage.id,
+  });
+});
+
+app.post("/api/users/:userId/spawn", async (c) => {
+  assertLocalUser(c.req.param("userId"));
+  const body = (await c.req.json()) as SpawnRequest;
+  const result = spawnNode(localUser.id, body);
+  return c.json({
+    node: result.node,
+    edge: result.edge,
     userMessage: result.userMessage,
     assistantMessageId: result.assistantMessage.id,
   });
