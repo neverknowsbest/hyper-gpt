@@ -12,3 +12,12 @@ body {
   background: Canvas;
   color: CanvasText;
 }
+
+/* Citation highlights — rendered via the CSS Custom Highlight API so the
+   message text has no wrapping elements at all (iOS Safari breaks text
+   selection across spans even when they have no event handlers). */
+::highlight(citation) {
+  background-color: color-mix(in srgb, dodgerblue 22%, Canvas);
+  text-decoration: underline 1.5px dodgerblue;
+  text-underline-offset: 2px;
+}
