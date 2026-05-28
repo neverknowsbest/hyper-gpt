@@ -17,18 +17,17 @@ Deferred features (things we considered and decided against for v1) live in [fut
 - [x] **Swipe-right to go up the tree.** Touch handlers on `ChatView`'s root translate the chat content rightward with the finger (with light past-cap resistance) so the gesture has visible feedback. On release, if horizontal travel ≥90px and dx > 1.5× dy, navigate to the parent node; otherwise spring back over 180ms. No edge-start restriction — iOS Safari intercepts left-edge swipes for its own back gesture, so we trigger anywhere. Touches starting inside `textarea`/buttons/the spawn chip are ignored so typing isn't disturbed.
 - [x] **Restore scroll position when returning to a node.** Module-level `Map<nodeId, scrollTop>` saves the transcript scroll position on every scroll event (not on unmount — Strict Mode's mount→cleanup→remount would overwrite with stale zeros). On first message-content render for a node, if a saved position exists it's restored; otherwise scroll-to-bottom as before. The bonus "flash the cited span on return" idea was deferred.
 - [x] **Settings UI for API key management.** `SettingsView` accessible via a ⚙ in the canvases panel. Backend endpoints: list (masks the full key in the GET response), PUT, DELETE for per-provider configs; GET/PUT preferences (stored in `user.metadata`); GET model catalog from `providers.MODEL_CATALOG`. Frontend shows masked keys with replace/remove controls, password-type input for new keys, and default provider + model dropdowns driven by the live catalog. `NewCanvasForm` now reads from saved preferences instead of hardcoded constants.
+- [x] **EC2 deployment.** Live at `https://hyper-gpt.com`. Two CDK stacks (HyperGptNetwork: public-only VPC, no NAT; HyperGptApp: t4g.nano AL2023 + EIP + SG + SSM-enabled role + Route53 A records), deployed from `infra/`. Box self-bootstraps via UserData (clones the public GitHub repo, installs Bun + Caddy, builds, starts systemd units). Caddy terminates TLS (Let's Encrypt), serves the SPA, proxies `/api/*` to the loopback-bound backend, and gates everything with basic_auth (random password generated on first boot). Anthropic key supplied via an SSM SecureString. Code updates via `deploy/update.sh`. Security-hardened before going public (see the `harden:` commit). Runbook in `docs/deployment.md`.
 
 ## Upcoming
 
 In rough priority order.
 
 ### Next
-- [ ] **PWA install** (blocked by mobile responsiveness + an HTTPS path).
+- [ ] **PWA install** (now unblocked — `hyper-gpt.com` provides the HTTPS origin iOS install requires).
   - `manifest.json`: `display: standalone`, theme/background colors, icons at 192/512 + apple-touch-icon 180.
   - Service worker: cache static assets only — no API response caching in v1.
   - One-time banner instructing manual Share → Add to Home Screen (iOS gives no programmatic prompt).
-  - Requires HTTPS to actually install on iOS, so lands together with (or after) Tailscale / sslip.io / real-domain setup.
-- [ ] **EC2 deployment** (when the local experience is good enough to want to carry it around). Per `architecture.md`. `t4g.nano` Amazon Linux 2023, EBS gp3 ~10GB, Elastic IP, security group inbound 80/443. systemd unit. Three-phase address: HTTP-on-IP → sslip.io → Route53 domain. Litestream → S3 same-region for backups. Update flow: `git pull && bun install && bun run build && systemctl restart`.
 
 ### After deploy
 
