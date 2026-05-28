@@ -30,6 +30,21 @@ interface SelectionTarget {
   text: string;
 }
 
+// ---- per-node scroll position memory ----
+//
+// Module-level so it survives the unmount/remount that happens when the user
+// navigates between nodes (App.tsx keys ChatView by activeNodeId).
+const savedScrollTops = new Map<string, number>();
+
+// ---- swipe-right-to-parent constants ----
+// No edge-start restriction: iOS Safari intercepts left-edge swipes for its
+// own browser-back gesture, so our handler never sees them in a Safari tab.
+// (In an installed PWA, the iOS gesture is gone and our handler works
+// regardless of start position.)
+const SWIPE_COMMIT_DX = 90; // travel to commit a navigate on release
+const SWIPE_DX_OVER_DY_RATIO = 1.5; // horizontal must dominate vertical
+const SWIPE_FOLLOW_CAP = 160; // max visual pull before resistance
+
 // ---- citation highlights via the CSS Custom Highlight API ----
 //
 // The message text contains zero wrapper elements for citations — iOS Safari
@@ -147,6 +162,17 @@ export function ChatView({
   // Track whether the user was at (or near) the bottom before the last render,
   // so we only auto-scroll when they haven't deliberately scrolled up.
   const wasNearBottomRef = useRef(true);
+  // Whether we've already applied initial-scroll behavior (restore-from-saved
+  // OR scroll-to-bottom) for this node. Reset per ChatView instance.
+  const initialScrollAppliedRef = useRef(false);
+  // Touch-swipe tracking for back-to-parent gesture.
+  const swipeStartRef = useRef<{ x: number; y: number; t: number } | null>(
+    null,
+  );
+  // Track whether the current swipe has committed visual tracking (so we
+  // can decide whether to animate back on release).
+  const swipeActiveRef = useRef(false);
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -303,26 +329,46 @@ export function ChatView({
     return () => document.removeEventListener("pointerup", onPointerUp);
   }, [isDesktop, readSelection]);
 
-  // Track whether the user is near the bottom so auto-scroll doesn't yank them
-  // away from where they were reading.
+  // Track whether the user is near the bottom (so auto-scroll doesn't yank
+  // them) AND continuously save the current scroll position for this node so
+  // we can restore it when they return. Save-on-scroll (rather than save-on-
+  // unmount) survives React Strict Mode's mount → cleanup → remount dance,
+  // which would otherwise overwrite saved positions with a stale 0.
   useEffect(() => {
     const el = transcriptRef.current;
     if (!el) return;
     const onScroll = () => {
       wasNearBottomRef.current =
         el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      savedScrollTops.set(nodeId, el.scrollTop);
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [nodeId]);
 
-  // Auto-scroll to bottom on new content if the user was already at the bottom.
+  // Scroll handling: on the first message-content render for this node,
+  // either restore a previously-saved scroll position (if we're returning
+  // from a tangent) or scroll to bottom. After that, normal auto-scroll
+  // behavior on new content as long as the user is near the bottom.
   useEffect(() => {
-    if (!wasNearBottomRef.current) return;
     const el = transcriptRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages]);
+    if (!el || messages.length === 0) return;
+
+    if (!initialScrollAppliedRef.current) {
+      initialScrollAppliedRef.current = true;
+      const saved = savedScrollTops.get(nodeId);
+      if (saved !== undefined) {
+        el.scrollTop = saved;
+        wasNearBottomRef.current =
+          el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        return;
+      }
+    }
+
+    if (wasNearBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages, nodeId]);
 
   // iOS keyboard handling: when the visible viewport changes (keyboard slides
   // in or out), re-anchor the transcript bottom so the latest message stays
@@ -368,8 +414,106 @@ export function ChatView({
 
   const inputDisabled = sending || !!streamingId;
 
+  // Swipe-right to navigate to the parent node, when one exists.
+  // During the gesture, the chat content follows the finger (translateX)
+  // so the user can see it's a directional gesture and not a tap. On
+  // release, if horizontal travel exceeds the commit threshold and was
+  // dominantly horizontal, we navigate; otherwise the content springs
+  // back to position.
+  //
+  // Touches starting inside the composer / a button / the chip are
+  // ignored so we don't fight typing or chip taps.
+  const resetSwipeTransform = (animated: boolean) => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    if (animated) {
+      el.style.transition = "transform 0.24s ease-out";
+      el.style.transform = "translateX(0)";
+      // Clear the transition after it finishes so future swipes aren't
+      // smoothed by a stale transition rule.
+      window.setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.style.transition = "";
+        }
+      }, 260);
+    } else {
+      el.style.transition = "";
+      el.style.transform = "";
+    }
+    swipeActiveRef.current = false;
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!inboundEdge) return;
+    if (e.touches.length !== 1) return;
+    const target = e.target as Element | null;
+    if (target?.closest("textarea, input, button, [data-spawn-chip]")) return;
+    const t = e.touches[0];
+    swipeStartRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+    swipeActiveRef.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const start = swipeStartRef.current;
+    if (!start) return;
+    const t = e.touches[0];
+    const dx = t.clientX - start.x;
+    const dy = Math.abs(t.clientY - start.y);
+    const el = chatContainerRef.current;
+    if (!el) return;
+    // Only start following the finger once the gesture is clearly a
+    // rightward swipe (not a vertical scroll or accidental horizontal jitter).
+    if (dx <= 8 || dx < dy) {
+      if (swipeActiveRef.current) resetSwipeTransform(false);
+      return;
+    }
+    swipeActiveRef.current = true;
+    // Light resistance: once past the cap, additional travel only nudges
+    // a little, suggesting "you've gone far enough."
+    const pull =
+      dx <= SWIPE_FOLLOW_CAP
+        ? dx
+        : SWIPE_FOLLOW_CAP + (dx - SWIPE_FOLLOW_CAP) * 0.25;
+    el.style.transition = "";
+    el.style.transform = `translateX(${pull}px)`;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    const start = swipeStartRef.current;
+    const wasActive = swipeActiveRef.current;
+    swipeStartRef.current = null;
+    if (!start || !inboundEdge) {
+      if (wasActive) resetSwipeTransform(true);
+      return;
+    }
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = Math.abs(t.clientY - start.y);
+    const committed =
+      dx >= SWIPE_COMMIT_DX && dx > dy * SWIPE_DX_OVER_DY_RATIO;
+    if (committed) {
+      // ChatView will unmount as the new node mounts, so no need to animate
+      // back; let the navigation handle the transition.
+      onNavigate(inboundEdge.sourceNodeId);
+    } else if (wasActive) {
+      resetSwipeTransform(true);
+    }
+  };
+
+  const handleTouchCancel = () => {
+    swipeStartRef.current = null;
+    if (swipeActiveRef.current) resetSwipeTransform(true);
+  };
+
   return (
-    <div style={chatContainer}>
+    <div
+      ref={chatContainerRef}
+      style={chatContainer}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
+    >
       {inboundEdge && (
         <ParentHeader
           edge={inboundEdge}
