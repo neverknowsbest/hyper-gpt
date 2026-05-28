@@ -12,13 +12,21 @@ import {
   getCanvasStructure,
   getNodeWithMessages,
   buildReplayEvents,
+  listProviderConfigs,
+  upsertProviderConfig,
+  deleteProviderConfig,
+  getUserPreferences,
+  setUserPreferences,
 } from "./orchestrator";
+import { MODEL_CATALOG } from "./providers";
 import { streamHub } from "./streaming";
 import type {
   CreateCanvasRequest,
+  ProviderId,
   SendMessageRequest,
   SpawnRequest,
   StreamEvent,
+  UserPreferences,
 } from "../shared/types";
 
 const localUser = ensureLocalUser();
@@ -111,6 +119,40 @@ app.post("/api/users/:userId/nodes/:nodeId/messages", async (c) => {
     userMessage: result.userMessage,
     assistantMessageId: result.assistantMessage.id,
   });
+});
+
+app.get("/api/models", (c) => {
+  return c.json(MODEL_CATALOG);
+});
+
+app.get("/api/users/:userId/provider-configs", (c) => {
+  assertLocalUser(c.req.param("userId"));
+  return c.json(listProviderConfigs(localUser.id));
+});
+
+app.put("/api/users/:userId/provider-configs/:provider", async (c) => {
+  assertLocalUser(c.req.param("userId"));
+  const provider = c.req.param("provider") as ProviderId;
+  const body = (await c.req.json()) as { apiKey: string };
+  return c.json(upsertProviderConfig(localUser.id, provider, body.apiKey));
+});
+
+app.delete("/api/users/:userId/provider-configs/:provider", (c) => {
+  assertLocalUser(c.req.param("userId"));
+  const provider = c.req.param("provider") as ProviderId;
+  deleteProviderConfig(localUser.id, provider);
+  return c.body(null, 204);
+});
+
+app.get("/api/users/:userId/preferences", (c) => {
+  assertLocalUser(c.req.param("userId"));
+  return c.json(getUserPreferences(localUser.id));
+});
+
+app.put("/api/users/:userId/preferences", async (c) => {
+  assertLocalUser(c.req.param("userId"));
+  const body = (await c.req.json()) as UserPreferences;
+  return c.json(setUserPreferences(localUser.id, body));
 });
 
 app.post("/api/users/:userId/spawn", async (c) => {

@@ -122,3 +122,21 @@ export interface SpawnResponse {
   userMessage: Message;
   assistantMessageId: string;
 }
+
+export interface ProviderConfigSummary {
+  provider: ProviderId;
+  hasKey: boolean;
+  masked: string | null;
+}
+
+export interface UserPreferences {
+  defaultProvider: ProviderId;
+  defaultModel: string;
+}
+
+export interface ModelInfo {
+  id: string;
+  displayName: string;
+}
+
+export type ModelCatalog = Record<ProviderId, ModelInfo[]>;

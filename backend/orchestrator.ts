@@ -1,6 +1,13 @@
-import { eq, asc } from "drizzle-orm";
+import { and, eq, asc } from "drizzle-orm";
 import { db } from "./db";
-import { canvases, nodes, messages, edges, providerConfigs } from "./db/schema";
+import {
+  canvases,
+  nodes,
+  messages,
+  edges,
+  providerConfigs,
+  users,
+} from "./db/schema";
 import { getProvider, type ProviderMessage } from "./providers";
 import { streamHub } from "./streaming";
 import type {
@@ -10,10 +17,123 @@ import type {
   Edge,
   Message,
   Node,
+  ProviderConfigSummary,
   ProviderId,
   SpawnRequest,
   StreamEvent,
+  UserPreferences,
 } from "../shared/types";
+
+const FALLBACK_PREFERENCES: UserPreferences = {
+  defaultProvider: "anthropic",
+  defaultModel: "claude-sonnet-4-6",
+};
+
+function maskKey(key: string): string {
+  if (!key) return "";
+  if (key.length <= 12) return "•".repeat(key.length);
+  // Show enough prefix that the user can tell which key this is, then last 4.
+  const prefixLen = key.startsWith("sk-ant-") ? 7 : key.startsWith("sk-") ? 3 : 4;
+  return `${key.slice(0, prefixLen)}…${"•".repeat(5)}${key.slice(-4)}`;
+}
+
+const KNOWN_PROVIDERS: ProviderId[] = ["anthropic", "openai"];
+
+export function listProviderConfigs(userId: string): ProviderConfigSummary[] {
+  const rows = db
+    .select()
+    .from(providerConfigs)
+    .where(eq(providerConfigs.userId, userId))
+    .all();
+  const byProvider = new Map(rows.map((r) => [r.provider, r] as const));
+  return KNOWN_PROVIDERS.map((p) => {
+    const row = byProvider.get(p);
+    return {
+      provider: p,
+      hasKey: !!row,
+      masked: row ? maskKey(row.apiKey) : null,
+    };
+  });
+}
+
+export function upsertProviderConfig(
+  userId: string,
+  provider: ProviderId,
+  apiKey: string,
+): ProviderConfigSummary {
+  const trimmed = apiKey.trim();
+  if (!trimmed) throw new Error("API key is empty");
+
+  const existing = db
+    .select()
+    .from(providerConfigs)
+    .where(
+      and(
+        eq(providerConfigs.userId, userId),
+        eq(providerConfigs.provider, provider),
+      ),
+    )
+    .get();
+
+  const t = new Date().toISOString();
+  if (existing) {
+    db.update(providerConfigs)
+      .set({ apiKey: trimmed, updatedAt: t })
+      .where(eq(providerConfigs.id, existing.id))
+      .run();
+  } else {
+    db.insert(providerConfigs)
+      .values({
+        id: uuid(),
+        userId,
+        provider,
+        apiKey: trimmed,
+        createdAt: t,
+        updatedAt: t,
+      })
+      .run();
+  }
+  return { provider, hasKey: true, masked: maskKey(trimmed) };
+}
+
+export function deleteProviderConfig(
+  userId: string,
+  provider: ProviderId,
+): void {
+  db.delete(providerConfigs)
+    .where(
+      and(
+        eq(providerConfigs.userId, userId),
+        eq(providerConfigs.provider, provider),
+      ),
+    )
+    .run();
+}
+
+export function getUserPreferences(userId: string): UserPreferences {
+  const user = db.select().from(users).where(eq(users.id, userId)).get();
+  if (!user) return FALLBACK_PREFERENCES;
+  const prefs = (user.metadata as { preferences?: Partial<UserPreferences> })
+    .preferences;
+  return {
+    defaultProvider: prefs?.defaultProvider ?? FALLBACK_PREFERENCES.defaultProvider,
+    defaultModel: prefs?.defaultModel ?? FALLBACK_PREFERENCES.defaultModel,
+  };
+}
+
+export function setUserPreferences(
+  userId: string,
+  prefs: UserPreferences,
+): UserPreferences {
+  const user = db.select().from(users).where(eq(users.id, userId)).get();
+  if (!user) throw new Error("User not found");
+  const metadata = {
+    ...user.metadata,
+    preferences: prefs,
+  };
+  db.update(users).set({ metadata }).where(eq(users.id, userId)).run();
+  return prefs;
+}
 
 // ---- helpers ----
 

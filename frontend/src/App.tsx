@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createCanvas, getMe, listCanvases } from "./lib/api";
+import {
+  createCanvas,
+  getMe,
+  getPreferences,
+  listCanvases,
+} from "./lib/api";
 import {
   MOBILE_BREAKPOINT,
   submitOnEnter,
@@ -8,7 +13,8 @@ import {
 } from "./lib/useMediaQuery";
 import { ChatView } from "./views/ChatView";
 import { MapView } from "./views/MapView";
-import type { Canvas, ProviderId } from "../../shared/types";
+import { SettingsView } from "./views/SettingsView";
+import type { Canvas, UserPreferences } from "../../shared/types";
 import {
   buttonStyle,
   errBox,
@@ -16,9 +22,6 @@ import {
   sectionTitle,
   textareaStyle,
 } from "./styles";
-
-const DEFAULT_PROVIDER: ProviderId = "anthropic";
-const DEFAULT_MODEL = "claude-sonnet-4-6";
 
 type ViewMode = "chat" | "map";
 
@@ -30,6 +33,8 @@ export function App() {
   const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("chat");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [prefs, setPrefs] = useState<UserPreferences | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,6 +46,7 @@ export function App() {
   useEffect(() => {
     if (!userId) return;
     listCanvases(userId).then(setCanvases).catch((e) => setError(String(e)));
+    getPreferences(userId).then(setPrefs).catch((e) => setError(String(e)));
   }, [userId]);
 
   const refreshCanvases = useCallback(async () => {
@@ -52,11 +58,19 @@ export function App() {
     setActiveCanvasId(canvas.id);
     setActiveNodeId(canvas.seedNodeId);
     setView("chat");
+    setSettingsOpen(false);
   }, []);
 
   const goBackToCanvasesList = useCallback(() => {
     setActiveCanvasId(null);
     setActiveNodeId(null);
+    setSettingsOpen(false);
+  }, []);
+
+  const openSettings = useCallback(() => {
+    setActiveCanvasId(null);
+    setActiveNodeId(null);
+    setSettingsOpen(true);
   }, []);
 
   const activeCanvas = useMemo(
@@ -64,56 +78,75 @@ export function App() {
     [canvases, activeCanvasId],
   );
 
+  const renderCanvasContent = () => {
+    if (!userId || !activeCanvas) return null;
+    return (
+      <>
+        <CanvasTopBar
+          canvasTitle={activeCanvas.title}
+          view={view}
+          onSetView={setView}
+          onBack={goBackToCanvasesList}
+          showBack={isMobile}
+        />
+        {view === "chat" && activeNodeId ? (
+          <ChatView
+            key={activeNodeId}
+            userId={userId}
+            nodeId={activeNodeId}
+            onNavigate={(nodeId) => {
+              setActiveNodeId(nodeId);
+              setView("chat");
+            }}
+            onLeaveCanvas={isMobile ? goBackToCanvasesList : undefined}
+          />
+        ) : (
+          <MapView
+            key={activeCanvas.id}
+            userId={userId}
+            canvasId={activeCanvas.id}
+            activeNodeId={activeNodeId}
+            onPickNode={(nodeId) => {
+              setActiveNodeId(nodeId);
+              setView("chat");
+            }}
+          />
+        )}
+      </>
+    );
+  };
+
+  const renderSettings = () =>
+    userId ? (
+      <>
+        {isMobile && (
+          <SimpleTopBar title="Settings" onBack={goBackToCanvasesList} />
+        )}
+        <SettingsView userId={userId} onPreferencesChange={setPrefs} />
+      </>
+    ) : null;
+
   // ---- mobile: one screen at a time ----
   if (isMobile) {
     return (
       <div style={mobileShell}>
-        {!activeCanvas && userId && (
+        {settingsOpen && renderSettings()}
+        {!settingsOpen && !activeCanvas && userId && (
           <CanvasesPanel
             userId={userId}
             canvases={canvases}
             activeCanvasId={activeCanvasId}
             error={error}
+            prefs={prefs}
             onCreate={async (canvas) => {
               await refreshCanvases();
               openCanvas(canvas);
             }}
             onOpen={openCanvas}
+            onOpenSettings={openSettings}
           />
         )}
-        {activeCanvas && userId && (
-          <>
-            <CanvasTopBar
-              canvasTitle={activeCanvas.title}
-              view={view}
-              onSetView={setView}
-              onBack={goBackToCanvasesList}
-              showBack
-            />
-            {view === "chat" && activeNodeId ? (
-              <ChatView
-                key={activeNodeId}
-                userId={userId}
-                nodeId={activeNodeId}
-                onNavigate={(nodeId) => {
-                  setActiveNodeId(nodeId);
-                  setView("chat");
-                }}
-              />
-            ) : (
-              <MapView
-                key={activeCanvas.id}
-                userId={userId}
-                canvasId={activeCanvas.id}
-                activeNodeId={activeNodeId}
-                onPickNode={(nodeId) => {
-                  setActiveNodeId(nodeId);
-                  setView("chat");
-                }}
-              />
-            )}
-          </>
-        )}
+        {!settingsOpen && activeCanvas && renderCanvasContent()}
       </div>
     );
   }
@@ -128,50 +161,22 @@ export function App() {
             canvases={canvases}
             activeCanvasId={activeCanvasId}
             error={error}
+            prefs={prefs}
             onCreate={async (canvas) => {
               await refreshCanvases();
               openCanvas(canvas);
             }}
             onOpen={openCanvas}
+            onOpenSettings={openSettings}
             embedded
           />
         )}
       </aside>
 
       <main style={chatPane}>
-        {userId && activeCanvas ? (
-          <>
-            <CanvasTopBar
-              canvasTitle={activeCanvas.title}
-              view={view}
-              onSetView={setView}
-              onBack={goBackToCanvasesList}
-              showBack={false}
-            />
-            {view === "chat" && activeNodeId ? (
-              <ChatView
-                key={activeNodeId}
-                userId={userId}
-                nodeId={activeNodeId}
-                onNavigate={(nodeId) => {
-                  setActiveNodeId(nodeId);
-                  setView("chat");
-                }}
-              />
-            ) : (
-              <MapView
-                key={activeCanvas.id}
-                userId={userId}
-                canvasId={activeCanvas.id}
-                activeNodeId={activeNodeId}
-                onPickNode={(nodeId) => {
-                  setActiveNodeId(nodeId);
-                  setView("chat");
-                }}
-              />
-            )}
-          </>
-        ) : (
+        {settingsOpen && renderSettings()}
+        {!settingsOpen && activeCanvas && renderCanvasContent()}
+        {!settingsOpen && !activeCanvas && (
           <div style={empty}>
             <p>Create a canvas to start.</p>
           </div>
@@ -181,28 +186,60 @@ export function App() {
   );
 }
 
+function SimpleTopBar({
+  title,
+  onBack,
+}: {
+  title: string;
+  onBack: () => void;
+}) {
+  return (
+    <div style={topBarStyle}>
+      <button onClick={onBack} style={backButtonStyle} aria-label="Back">
+        ←
+      </button>
+      <div style={topBarTitle}>{title}</div>
+    </div>
+  );
+}
+
 function CanvasesPanel({
   userId,
   canvases,
   activeCanvasId,
   error,
+  prefs,
   onCreate,
   onOpen,
+  onOpenSettings,
   embedded = false,
 }: {
   userId: string;
   canvases: Canvas[];
   activeCanvasId: string | null;
   error: string | null;
+  prefs: UserPreferences | null;
   onCreate: (canvas: Canvas) => Promise<void> | void;
   onOpen: (canvas: Canvas) => void;
+  onOpenSettings: () => void;
   embedded?: boolean;
 }) {
   return (
     <div style={embedded ? embeddedPanel : fullScreenPanel}>
-      <h1 style={brand}>HyperGPT</h1>
+      <div style={brandRow}>
+        <h1 style={brand}>HyperGPT</h1>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          style={brandSettingsButton}
+          aria-label="Settings"
+          title="Settings"
+        >
+          ⚙
+        </button>
+      </div>
       {error && <div style={errBox}>{error}</div>}
-      <NewCanvasForm userId={userId} onCreate={onCreate} />
+      <NewCanvasForm userId={userId} prefs={prefs} onCreate={onCreate} />
       <h2 style={sectionTitle}>Canvases</h2>
       <ul style={canvasList}>
         {canvases.map((c) => (
@@ -226,9 +263,11 @@ function CanvasesPanel({
 
 function NewCanvasForm({
   userId,
+  prefs,
   onCreate,
 }: {
   userId: string;
+  prefs: UserPreferences | null;
   onCreate: (canvas: Canvas) => void | Promise<void>;
 }) {
   const [text, setText] = useState("");
@@ -239,13 +278,13 @@ function NewCanvasForm({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || busy) return;
+    if (!text.trim() || busy || !prefs) return;
     setBusy(true);
     setErr(null);
     try {
       const res = await createCanvas(userId, {
-        defaultProvider: DEFAULT_PROVIDER,
-        defaultModel: DEFAULT_MODEL,
+        defaultProvider: prefs.defaultProvider,
+        defaultModel: prefs.defaultModel,
         seedUserMessage: [{ type: "text", text }],
       });
       setText("");
@@ -356,7 +395,27 @@ const fullScreenPanel = {
   overflowY: "auto",
 } as const;
 
+const brandRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.5rem",
+} as const;
+
 const brand = { margin: 0, fontSize: "1.25rem" } as const;
+
+const brandSettingsButton = {
+  background: "transparent",
+  border: "none",
+  font: "inherit",
+  fontSize: "1.2rem",
+  color: "color-mix(in srgb, CanvasText 65%, Canvas)",
+  cursor: "pointer",
+  padding: "0.4rem 0.5rem",
+  borderRadius: 6,
+  minHeight: 36,
+  minWidth: 36,
+} as const;
 
 const canvasList = {
   listStyle: "none",

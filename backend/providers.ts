@@ -2,8 +2,20 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   ContentPart,
   MessageRole,
+  ModelCatalog,
   ProviderId,
 } from "../shared/types";
+
+// Hard-coded for v1; refreshed by editing this file when new models ship.
+// Source of truth for the settings UI's model dropdown.
+export const MODEL_CATALOG: ModelCatalog = {
+  anthropic: [
+    { id: "claude-opus-4-7", displayName: "Claude Opus 4.7" },
+    { id: "claude-sonnet-4-6", displayName: "Claude Sonnet 4.6" },
+    { id: "claude-haiku-4-5-20251001", displayName: "Claude Haiku 4.5" },
+  ],
+  openai: [], // OpenAI provider not implemented yet
+};
 
 export interface ProviderMessage {
   role: MessageRole;

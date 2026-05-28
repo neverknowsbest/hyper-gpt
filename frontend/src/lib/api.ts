@@ -5,11 +5,15 @@ import type {
   GetCanvasResponse,
   GetNodeResponse,
   Message,
+  ModelCatalog,
+  ProviderConfigSummary,
+  ProviderId,
   SendMessageRequest,
   SendMessageResponse,
   SpawnRequest,
   SpawnResponse,
   StreamEvent,
+  UserPreferences,
 } from "../../../shared/types";
 
 async function jsonFetch<T>(
@@ -86,6 +90,53 @@ export async function spawn(
     method: "POST",
     body: input,
   });
+}
+
+export async function listProviderConfigs(
+  userId: string,
+): Promise<ProviderConfigSummary[]> {
+  return jsonFetch(`/api/users/${userId}/provider-configs`);
+}
+
+export async function setProviderKey(
+  userId: string,
+  provider: ProviderId,
+  apiKey: string,
+): Promise<ProviderConfigSummary> {
+  return jsonFetch(`/api/users/${userId}/provider-configs/${provider}`, {
+    method: "PUT",
+    body: { apiKey },
+  });
+}
+
+export async function deleteProviderKey(
+  userId: string,
+  provider: ProviderId,
+): Promise<void> {
+  const res = await fetch(`/api/users/${userId}/provider-configs/${provider}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    throw new Error(`${res.status} ${res.statusText}`);
+  }
+}
+
+export async function getPreferences(userId: string): Promise<UserPreferences> {
+  return jsonFetch(`/api/users/${userId}/preferences`);
+}
+
+export async function setPreferences(
+  userId: string,
+  prefs: UserPreferences,
+): Promise<UserPreferences> {
+  return jsonFetch(`/api/users/${userId}/preferences`, {
+    method: "PUT",
+    body: prefs,
+  });
+}
+
+export async function getModelCatalog(): Promise<ModelCatalog> {
+  return jsonFetch("/api/models");
 }
 
 // Open an EventSource for an assistant message. Calls handlers as events arrive.
