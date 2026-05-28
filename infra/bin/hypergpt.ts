@@ -1,6 +1,6 @@
 import { App } from "aws-cdk-lib";
-import { ComputeStack } from "../lib/compute-stack";
-import { DnsStack } from "../lib/dns-stack";
+import { NetworkStack } from "../lib/network-stack";
+import { AppStack } from "../lib/app-stack";
 
 const app = new App();
 
@@ -13,15 +13,10 @@ const env = {
 const domainName = app.node.tryGetContext("domainName") as string;
 const repoUrl = app.node.tryGetContext("repoUrl") as string;
 
-const compute = new ComputeStack(app, "HyperGptCompute", {
-  env,
-  repoUrl,
-});
+// VPC lives on its own. The app stack finds it by tag (Vpc.fromLookup), so
+// there's no cross-stack construct reference / CFN export between them.
+// First deploy is two-phase: deploy the network stack before the app stack
+// synthesizes (see docs/deployment.md).
+new NetworkStack(app, "HyperGptNetwork", { env });
 
-// DNS lives in its own stack so record changes are decoupled from compute
-// redeploys. It consumes the Elastic IP produced by the compute stack.
-new DnsStack(app, "HyperGptDns", {
-  env,
-  domainName,
-  ipAddress: compute.publicIp,
-});
+new AppStack(app, "HyperGptApp", { env, repoUrl, domainName });

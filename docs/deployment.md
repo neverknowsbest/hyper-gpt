@@ -8,15 +8,22 @@ How HyperGPT gets to `https://hyper-gpt.com`. Infra is CDK (TypeScript) in
 
 Two CDK stacks:
 
-- **HyperGptCompute** — a `t4g.nano` (Amazon Linux 2023, ARM) in the default
-  VPC's public subnet, a 10 GB encrypted gp3 root volume, a security group
+- **HyperGptNetwork** — a described-in-code VPC (`10.0.0.0/16`, public
+  subnets only, **zero NAT gateways**), tagged `Name=hypergpt`. Separate
+  stack because the network is rarely touched and should be cleanly
+  reproducible / destroyable rather than relying on the account default VPC.
+- **HyperGptApp** — a `t4g.nano` (Amazon Linux 2023, ARM) in a public
+  subnet of that VPC, a 10 GB encrypted gp3 root volume, a security group
   (inbound 80/443 only — no SSH), an instance role with SSM Session Manager
-  access + read access to `/hypergpt/*` SSM parameters, an Elastic IP, and a
-  UserData script that bootstraps the box on first boot.
-- **HyperGptDns** — `A` records for `hyper-gpt.com` and `www.hyper-gpt.com`
-  pointing at the Elastic IP, added to the existing hosted zone. Separate
-  stack so DNS changes are decoupled from compute redeploys; it consumes the
-  EIP from the compute stack.
+  access + read on `/hypergpt/*` SSM params + scoped KMS decrypt, an Elastic
+  IP, UserData that bootstraps the box, and the `A` records for
+  `hyper-gpt.com` + `www.hyper-gpt.com` pointing at the EIP.
+
+The two stacks are decoupled with **no CloudFormation cross-stack exports**:
+the app stack finds the VPC via `Vpc.fromLookup({ tags: { Name: "hypergpt" }})`,
+and the DNS records live in the same stack as the EIP they point at. The
+trade-off is that the **first** deploy is two-phase — the network stack must
+exist before the app stack synthesizes (the lookup needs a real VPC to find).
 
 On the box: **Caddy** terminates TLS (auto Let's Encrypt), serves the built
 SPA, reverse-proxies `/api/*` to the **Bun backend** (systemd unit
@@ -34,20 +41,26 @@ SPA, reverse-proxies `/api/*` to the **Bun backend** (systemd unit
 
 ## First deploy
 
-### 1. Provision infra
+### 1. Provision infra (two-phase, first time only)
 
 ```
 cd infra
 bun install
-bunx cdk bootstrap          # once per account+region; you may already have it
-bunx cdk deploy --all
+bunx cdk bootstrap                 # once per account+region; you may already have it
+bunx cdk deploy HyperGptNetwork    # create + tag the VPC first
+bunx cdk deploy HyperGptApp        # now the VPC lookup resolves
 ```
 
-CDK will look up your default VPC and the hosted zone (writing
-`cdk.context.json`), then create both stacks. When it finishes it prints the
-instance id, the public IP, and an `aws ssm start-session …` command. The box
-is now bootstrapping itself (cloning the repo, installing Bun + Caddy,
-building, starting services) — give it a few minutes.
+Deploy the network stack **before** the app stack the first time — the app
+stack's `Vpc.fromLookup` needs the VPC to already exist, and running
+`cdk deploy --all` on a clean account would synth the app stack against a
+dummy VPC and cache it in `cdk.context.json`. After both stacks exist,
+`cdk deploy HyperGptApp` (or `--all`) is fine for subsequent changes.
+
+The hosted-zone lookup also runs at synth and writes `cdk.context.json`.
+`HyperGptApp` prints the public IP and an `aws ssm start-session …` command
+when it finishes. The box is now bootstrapping itself (cloning the repo,
+installing Bun + Caddy, building, starting services) — give it a few minutes.
 
 ### 2. Put the Anthropic key in SSM
 
@@ -111,6 +124,9 @@ Edit `infra/lib/*.ts`, then:
 ```
 cd infra && bunx cdk diff && bunx cdk deploy --all
 ```
+
+(`--all` is safe here since both stacks already exist — the two-phase
+ordering only matters on the very first deploy.)
 
 ## Rotating the basic-auth password
 
