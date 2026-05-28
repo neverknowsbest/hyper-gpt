@@ -138,10 +138,15 @@ export function ChatView({
   userId,
   nodeId,
   onNavigate,
+  onLeaveCanvas,
 }: {
   userId: string;
   nodeId: string;
   onNavigate: (nodeId: string) => void;
+  // Called when the user swipes right on a node that has no parent (the
+  // canvas seed). Lets the seed node's swipe-right take them out of the
+  // canvas entirely instead of doing nothing.
+  onLeaveCanvas?: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inboundEdge, setInboundEdge] = useState<Edge | null>(null);
@@ -443,9 +448,17 @@ export function ChatView({
     swipeActiveRef.current = false;
   };
 
+  // Whether a swipe-right has somewhere to go from this node — parent if
+  // we have one, otherwise back to the canvases list.
+  const canSwipeBack = !!inboundEdge || !!onLeaveCanvas;
+
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!inboundEdge) return;
+    if (!canSwipeBack) return;
     if (e.touches.length !== 1) return;
+    // Skip while there's an active selection — the user is likely dragging
+    // an iOS selection handle to extend it, not trying to navigate.
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) return;
     const target = e.target as Element | null;
     if (target?.closest("textarea, input, button, [data-spawn-chip]")) return;
     const t = e.touches[0];
@@ -482,7 +495,7 @@ export function ChatView({
     const start = swipeStartRef.current;
     const wasActive = swipeActiveRef.current;
     swipeStartRef.current = null;
-    if (!start || !inboundEdge) {
+    if (!start || !canSwipeBack) {
       if (wasActive) resetSwipeTransform(true);
       return;
     }
@@ -492,9 +505,13 @@ export function ChatView({
     const committed =
       dx >= SWIPE_COMMIT_DX && dx > dy * SWIPE_DX_OVER_DY_RATIO;
     if (committed) {
-      // ChatView will unmount as the new node mounts, so no need to animate
-      // back; let the navigation handle the transition.
-      onNavigate(inboundEdge.sourceNodeId);
+      // ChatView will unmount as we navigate away, so no need to animate
+      // back; let the next view's mount handle the transition.
+      if (inboundEdge) {
+        onNavigate(inboundEdge.sourceNodeId);
+      } else if (onLeaveCanvas) {
+        onLeaveCanvas();
+      }
     } else if (wasActive) {
       resetSwipeTransform(true);
     }

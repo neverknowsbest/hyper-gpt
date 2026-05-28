@@ -86,6 +86,13 @@ The model can't invoke tools (web search, code execution, file I/O) inside a con
 - **Why deferred:** scope, and the UX of "tool calls inside a node, rendered in the transcript" is a design problem of its own.
 - **Keep the path open by:** the message model accommodating non-prose message parts (a tool-use part, a tool-result part), even if v1 doesn't emit them.
 
+### Per-prompt model selection
+
+The user picks which model answers each individual prompt — a small model picker next to the composer, defaulting to the canvas's default but overridable for any single turn. Different from the existing per-canvas and per-node overrides (which apply to the whole conversation): this is "use Opus for THIS question, then back to Sonnet."
+
+- **Why deferred:** v1 settings already let users pick a default model; per-prompt fine-grained control is power-user behavior (e.g. "use Opus for this hard question, Haiku for the next follow-up") that doesn't move the v1 thesis. Adds UI complexity in the most-touched area of the app.
+- **Keep the path open by:** the data model is already ready — `Message.provider` and `Message.model` record what produced each assistant message, so mixed-model conversations replay correctly. The `SendMessageRequest` and `SpawnRequest` shapes would grow an optional `model: { provider, model }` field; when absent, the existing canvas/node default chain applies. The provider abstraction (`streamChat`) already takes provider+model per call, so the backend wiring is mostly already there. The new work is mostly UX: a small chip/dropdown near the composer that's easy to use one-handed on mobile.
+
 ### Multiple models / personas in one node
 
 A node is one back-and-forth with one model. A tangent doesn't internally branch into "summarizer says X, critic says Y."
