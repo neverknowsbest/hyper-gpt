@@ -130,6 +130,7 @@ export function App() {
   if (isMobile) {
     return (
       <div style={mobileShell}>
+        <InstallHint />
         {settingsOpen && renderSettings()}
         {!settingsOpen && !activeCanvas && userId && (
           <CanvasesPanel
@@ -154,6 +155,7 @@ export function App() {
   // ---- desktop: sidebar + main pane ----
   return (
     <div style={desktopShell}>
+      <InstallHint />
       <aside style={sidebar}>
         {userId && (
           <CanvasesPanel
@@ -199,6 +201,49 @@ function SimpleTopBar({
         ←
       </button>
       <div style={topBarTitle}>{title}</div>
+    </div>
+  );
+}
+
+const A2HS_DISMISSED_KEY = "hypergpt:a2hs-dismissed";
+
+// One-time hint shown on iOS Safari (the only iOS browser that can install a
+// PWA) when not already running standalone. iOS exposes no programmatic
+// install prompt, so we instruct the manual Share → Add to Home Screen flow.
+function InstallHint() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const isIOS =
+      /iphone|ipad|ipod/i.test(ua) ||
+      (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+    const standalone =
+      ("standalone" in navigator &&
+        (navigator as unknown as { standalone?: boolean }).standalone) ||
+      window.matchMedia("(display-mode: standalone)").matches;
+    const dismissed = localStorage.getItem(A2HS_DISMISSED_KEY) === "1";
+    setShow(Boolean(isIOS && !standalone && !dismissed));
+  }, []);
+
+  if (!show) return null;
+
+  return (
+    <div style={installBanner}>
+      <span style={{ flex: 1 }}>
+        Install HyperGPT: tap <strong>Share</strong> →{" "}
+        <strong>Add to Home Screen</strong>
+      </span>
+      <button
+        onClick={() => {
+          localStorage.setItem(A2HS_DISMISSED_KEY, "1");
+          setShow(false);
+        }}
+        aria-label="Dismiss"
+        style={installDismiss}
+      >
+        ×
+      </button>
     </div>
   );
 }
@@ -500,4 +545,33 @@ const empty = {
   placeItems: "center",
   width: "100%",
   color: "color-mix(in srgb, CanvasText 50%, Canvas)",
+} as const;
+
+const installBanner = {
+  position: "fixed" as const,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  zIndex: 1000,
+  display: "flex",
+  alignItems: "center",
+  gap: "0.75rem",
+  padding: "0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom))",
+  background: "color-mix(in srgb, dodgerblue 22%, Canvas)",
+  borderTop: "1px solid color-mix(in srgb, CanvasText 15%, Canvas)",
+  fontSize: "0.9rem",
+  color: "CanvasText",
+};
+
+const installDismiss = {
+  background: "transparent",
+  border: "none",
+  font: "inherit",
+  fontSize: "1.4rem",
+  lineHeight: 1,
+  color: "CanvasText",
+  cursor: "pointer",
+  padding: "0 0.4rem",
+  minHeight: 44,
+  minWidth: 44,
 } as const;

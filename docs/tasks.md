@@ -18,16 +18,15 @@ Deferred features (things we considered and decided against for v1) live in [fut
 - [x] **Restore scroll position when returning to a node.** Module-level `Map<nodeId, scrollTop>` saves the transcript scroll position on every scroll event (not on unmount — Strict Mode's mount→cleanup→remount would overwrite with stale zeros). On first message-content render for a node, if a saved position exists it's restored; otherwise scroll-to-bottom as before. The bonus "flash the cited span on return" idea was deferred.
 - [x] **Settings UI for API key management.** `SettingsView` accessible via a ⚙ in the canvases panel. Backend endpoints: list (masks the full key in the GET response), PUT, DELETE for per-provider configs; GET/PUT preferences (stored in `user.metadata`); GET model catalog from `providers.MODEL_CATALOG`. Frontend shows masked keys with replace/remove controls, password-type input for new keys, and default provider + model dropdowns driven by the live catalog. `NewCanvasForm` now reads from saved preferences instead of hardcoded constants.
 - [x] **EC2 deployment.** Live at `https://hyper-gpt.com`. Two CDK stacks (HyperGptNetwork: public-only VPC, no NAT; HyperGptApp: t4g.nano AL2023 + EIP + SG + SSM-enabled role + Route53 A records), deployed from `infra/`. Box self-bootstraps via UserData (clones the public GitHub repo, installs Bun + Caddy, builds, starts systemd units). Caddy terminates TLS (Let's Encrypt), serves the SPA, proxies `/api/*` to the loopback-bound backend, and gates everything with basic_auth (random password generated on first boot). Anthropic key supplied via an SSM SecureString. Code updates via `deploy/update.sh`. Security-hardened before going public (see the `harden:` commit). Runbook in `docs/deployment.md`.
+- [x] **PWA install.** `vite-plugin-pwa` generates the web manifest (standalone display, theme/background `#111`, 192/512 + maskable icons) and a Workbox service worker that precaches build assets only — `/api` is denylisted so it always hits the network and SSE streaming is unaffected. App icon is `frontend/public/icon.svg` (branching-node-graph mark), rasterized to PNGs by `bun run gen:icons` (sharp). `index.html` carries the iOS meta tags + `apple-touch-icon`. A one-time, dismissible "Add to Home Screen" hint shows on iOS Safari when not already standalone (iOS exposes no programmatic install prompt). Deploy with `deploy/update.sh` on the box.
 
 ## Upcoming
 
 In rough priority order.
 
 ### Next
-- [ ] **PWA install** (now unblocked — `hyper-gpt.com` provides the HTTPS origin iOS install requires).
-  - `manifest.json`: `display: standalone`, theme/background colors, icons at 192/512 + apple-touch-icon 180.
-  - Service worker: cache static assets only — no API response caching in v1.
-  - One-time banner instructing manual Share → Add to Home Screen (iOS gives no programmatic prompt).
+
+(v1 task list is clear — remaining items are polish / ops, below.)
 
 ### After deploy
 
