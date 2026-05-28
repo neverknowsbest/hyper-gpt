@@ -9,7 +9,7 @@ Type=notify
 User=root
 # HYPERGPT_PASSWORD_HASH for basic_auth lives here.
 EnvironmentFile=-/etc/caddy/env
-ExecStart=/usr/local/bin/caddy run --environ --config /etc/caddy/Caddyfile
+ExecStart=/usr/local/bin/caddy run --config /etc/caddy/Caddyfile
 ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
 Restart=on-failure
 RestartSec=5

@@ -233,9 +233,14 @@ app.get("/api/stream/:messageId", (c) => {
 });
 
 const port = Number(process.env.PORT ?? 3000);
-console.log(`[boot] backend listening on http://localhost:${port}`);
+// Bind to loopback by default — the backend is only ever reached via Caddy
+// (prod) or the Vite proxy (dev), both same-host. Defense-in-depth so it's
+// never exposed off-box even if a security group is misconfigured.
+const hostname = process.env.HOST ?? "127.0.0.1";
+console.log(`[boot] backend listening on http://${hostname}:${port}`);
 
 export default {
   port,
+  hostname,
   fetch: app.fetch,
 };

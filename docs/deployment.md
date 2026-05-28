@@ -92,6 +92,24 @@ sudo cat /root/hypergpt-initial-password.txt   # the basic-auth password
 ```
 
 Basic-auth username is `hyper`; the password is the value you just printed.
+The password was generated randomly on first boot (`openssl rand`), hashed
+with bcrypt, and the hash stored in `/etc/caddy/env` (what Caddy actually
+uses). After you save the password to your password manager, delete the
+plaintext copy:
+
+```
+sudo rm /root/hypergpt-initial-password.txt
+```
+
+To set your **own** password instead of the random one:
+
+```
+# on the box:
+HASH=$(caddy hash-password --plaintext 'your-chosen-password')
+echo "HYPERGPT_PASSWORD_HASH=${HASH}" | sudo tee /etc/caddy/env >/dev/null
+sudo chmod 600 /etc/caddy/env
+sudo systemctl restart caddy
+```
 
 ### 4. Verify
 
@@ -99,6 +117,18 @@ Wait for DNS to propagate (the A record TTL is 5 min; first resolution may
 take a little longer) and for Caddy to obtain a cert. Then open
 `https://hyper-gpt.com`, log in with `hyper` + the password, and create a
 canvas.
+
+**Confirm the auth gate actually covers the API** (it's the only lock on the
+door, so verify it empirically rather than trusting the config):
+
+```
+curl -i https://hyper-gpt.com/api/me          # expect 401 Unauthorized
+curl -i https://hyper-gpt.com/api/health       # expect 401
+curl -i -u hyper:PASSWORD https://hyper-gpt.com/api/me   # expect 200 + userId
+```
+
+If either of the first two returns data instead of `401`, the basic_auth
+isn't gating `/api/*` — stop and fix the Caddyfile before using the site.
 
 If the cert isn't issuing, check `sudo journalctl -u caddy -f` on the box —
 the usual cause is the A record not yet resolving to the EIP, so Let's

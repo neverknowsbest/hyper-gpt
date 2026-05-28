@@ -5,7 +5,10 @@ export default defineConfig({
   root: "frontend",
   plugins: [react()],
   server: {
-    host: true, // bind to 0.0.0.0 so LAN devices (phone) can reach it
+    // Loopback-only by default (safe on any network). Set HOST_LAN=1 to bind
+    // 0.0.0.0 for phone testing — only do that on a trusted network, since
+    // the dev server has no auth and proxies to the API.
+    host: process.env.HOST_LAN === "1" ? true : "127.0.0.1",
     port: 5173,
     proxy: {
       "/api": "http://localhost:3000",

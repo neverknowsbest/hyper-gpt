@@ -1,25 +1,32 @@
 hyper-gpt.com, www.hyper-gpt.com {
 	encode gzip
 
-	# Single shared password — this is a one-user app. The hash comes from
-	# /etc/caddy/env (HYPERGPT_PASSWORD_HASH), generated on first boot.
-	# Username is "hyper".
-	basic_auth {
-		hyper {$HYPERGPT_PASSWORD_HASH}
-	}
-
-	# API + SSE stream → the Bun backend. flush_interval -1 disables
-	# response buffering so server-sent events arrive promptly.
-	handle /api/* {
-		reverse_proxy localhost:3000 {
-			flush_interval -1
+	# `route` evaluates its directives in written order (rather than Caddy's
+	# implicit directive ordering), so basic_auth is GUARANTEED to run before
+	# any routing/serving below. This is the only gate in front of the app,
+	# so we make the ordering explicit rather than relying on defaults.
+	route {
+		# Single shared password — one-user app. Hash comes from
+		# /etc/caddy/env (HYPERGPT_PASSWORD_HASH), set on first boot.
+		# Username is "hyper". Runs on every request; 401s unauthenticated
+		# ones before they reach the API or static files.
+		basic_auth {
+			hyper {$HYPERGPT_PASSWORD_HASH}
 		}
-	}
 
-	# Everything else → the built SPA, with history-API fallback.
-	handle {
-		root * /home/ec2-user/hypergpt/dist/frontend
-		try_files {path} /index.html
-		file_server
+		# API + SSE stream → the Bun backend. flush_interval -1 disables
+		# response buffering so server-sent events arrive promptly.
+		handle /api/* {
+			reverse_proxy localhost:3000 {
+				flush_interval -1
+			}
+		}
+
+		# Everything else → the built SPA, with history-API fallback.
+		handle {
+			root * /home/ec2-user/hypergpt/dist/frontend
+			try_files {path} /index.html
+			file_server
+		}
 	}
 }

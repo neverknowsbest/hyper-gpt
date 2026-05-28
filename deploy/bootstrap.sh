@@ -36,12 +36,14 @@ bash "$REPO_DIR/deploy/fetch-secrets.sh" || true
 # Stored hashed for Caddy; plaintext written to a root-only file you can read
 # over SSM. Regenerate any time by deleting /etc/caddy/env and re-running.
 if [ ! -f /etc/caddy/env ]; then
+  set +x  # stop tracing — keep the password/hash out of the bootstrap log
   PW="$(openssl rand -base64 18)"
   HASH="$(/usr/local/bin/caddy hash-password --plaintext "$PW")"
   echo "HYPERGPT_PASSWORD_HASH=${HASH}" > /etc/caddy/env
   chmod 600 /etc/caddy/env
   echo "$PW" > /root/hypergpt-initial-password.txt
   chmod 600 /root/hypergpt-initial-password.txt
+  set -x
 fi
 
 # --- systemd + Caddy config ---

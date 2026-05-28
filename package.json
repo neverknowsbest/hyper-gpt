@@ -6,6 +6,7 @@
     "dev:backend": "bun --watch backend/server.ts",
     "dev:frontend": "vite",
     "dev": "concurrently -k -n backend,frontend -c blue,green \"bun run dev:backend\" \"bun run dev:frontend\"",
+    "dev:lan": "HOST_LAN=1 bun run dev",
     "build": "vite build",
     "start": "bun backend/server.ts",
     "db:generate": "drizzle-kit generate",
