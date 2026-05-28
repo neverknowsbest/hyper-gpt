@@ -1,0 +1,8 @@
+{
+  "app": "bun bin/hypergpt.ts",
+  "context": {
+    "repoUrl": "https://github.com/CHANGE_ME/hypergpt.git",
+    "domainName": "hyper-gpt.com",
+    "@aws-cdk/core:newStyleStackSynthesis": true
+  }
+}

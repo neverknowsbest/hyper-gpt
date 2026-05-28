@@ -1,0 +1,20 @@
+[Unit]
+Description=Caddy
+Documentation=https://caddyserver.com/docs/
+After=network.target network-online.target
+Requires=network-online.target
+
+[Service]
+Type=notify
+User=root
+# HYPERGPT_PASSWORD_HASH for basic_auth lives here.
+EnvironmentFile=-/etc/caddy/env
+ExecStart=/usr/local/bin/caddy run --environ --config /etc/caddy/Caddyfile
+ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

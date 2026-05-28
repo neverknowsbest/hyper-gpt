@@ -5,3 +5,7 @@ data/
 .env.local
 .DS_Store
 *.log
+
+# CDK
+cdk.out/
+infra/cdk.context.json

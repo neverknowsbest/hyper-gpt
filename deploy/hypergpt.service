@@ -1,0 +1,15 @@
+[Unit]
+Description=HyperGPT backend
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/hypergpt
+EnvironmentFile=/etc/hypergpt/env
+ExecStart=/home/ec2-user/.bun/bin/bun backend/server.ts
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+hyper-gpt.com, www.hyper-gpt.com {
+	encode gzip
+
+	# Single shared password — this is a one-user app. The hash comes from
+	# /etc/caddy/env (HYPERGPT_PASSWORD_HASH), generated on first boot.
+	# Username is "hyper".
+	basic_auth {
+		hyper {$HYPERGPT_PASSWORD_HASH}
+	}
+
+	# API + SSE stream → the Bun backend. flush_interval -1 disables
+	# response buffering so server-sent events arrive promptly.
+	handle /api/* {
+		reverse_proxy localhost:3000 {
+			flush_interval -1
+		}
+	}
+
+	# Everything else → the built SPA, with history-API fallback.
+	handle {
+		root * /home/ec2-user/hypergpt/dist/frontend
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -8,9 +8,10 @@ import { users, providerConfigs, type User } from "./schema";
 import type { ProviderId } from "../../shared/types";
 
 const DATA_DIR = process.env.DATA_DIR ?? "./data";
+const DB_FILE = process.env.DB_FILE ?? "dev.db";
 mkdirSync(DATA_DIR, { recursive: true });
 
-const sqlite = new Database(join(DATA_DIR, "dev.db"));
+const sqlite = new Database(join(DATA_DIR, DB_FILE));
 sqlite.exec("PRAGMA journal_mode = WAL;");
 sqlite.exec("PRAGMA foreign_keys = ON;");
 
