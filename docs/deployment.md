@@ -140,12 +140,15 @@ After pushing changes to GitHub:
 
 ```
 aws ssm start-session --target <instance-id> --region us-east-1
-# on the box:
+# on the box (SSM logs you in as ssm-user; the script handles that):
 bash /home/ec2-user/hypergpt/deploy/update.sh
 ```
 
-`update.sh` does `git pull` → `bun install` → `bun run build` → restart the
-backend (migrations run on startup) → re-sync + reload Caddy.
+SSM Session Manager lands you as `ssm-user`, but the repo and Bun install
+belong to `ec2-user`. `update.sh` detects this and re-execs its body as
+`ec2-user` automatically, so you can run it as-is. It does `git pull` →
+`bun install` → `bun run build` → restart the backend (migrations run on
+startup) → re-sync + reload Caddy.
 
 ## Updating infra
 

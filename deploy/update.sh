@@ -1,9 +1,17 @@
 #!/bin/bash
-# Code deploy: pull latest, rebuild, restart the backend. Run as ec2-user on
-# the box (it has passwordless sudo for the restart). Migrations run on
+# Code deploy: pull latest, rebuild, restart the backend. Migrations run on
 # backend startup, so no separate migrate step.
-set -euxo pipefail
+#
+# Works whether you invoke it as ssm-user (SSM Session Manager's default),
+# root, or ec2-user — it re-execs its body as ec2-user, who owns the repo and
+# the Bun install. (ec2-user has passwordless sudo for the systemctl calls.)
+set -euo pipefail
 
+if [ "$(id -un)" != "ec2-user" ]; then
+  exec sudo -u ec2-user -H bash "$0" "$@"
+fi
+
+set -x
 REPO_DIR=/home/ec2-user/hypergpt
 BUN=/home/ec2-user/.bun/bin/bun
 
