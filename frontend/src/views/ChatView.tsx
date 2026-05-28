@@ -681,7 +681,7 @@ function MessageBubble({
         ref={contentRef}
         data-message-id={message.id}
         onClick={handleClick}
-        style={{ whiteSpace: "pre-wrap" }}
+        style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
       >
         {visibleText}
         {message.status === "streaming" && <span style={cursorStyle}> ▋</span>}
@@ -812,8 +812,10 @@ function SpawnModal({
 const chatContainer = {
   display: "grid",
   gridTemplateRows: "auto 1fr auto",
+  gridTemplateColumns: "minmax(0, 1fr)",
   width: "100%",
   minHeight: 0,
+  minWidth: 0,
   height: "100%",
   position: "relative",
 } as const;
@@ -830,8 +832,12 @@ const transcript = {
 const bubble = {
   padding: "0.75rem 1rem",
   borderRadius: 12,
-  maxWidth: "min(60ch, 88%)",
+  maxWidth: "min(60ch, 100%)",
   lineHeight: 1.5,
+  // Break long unbroken tokens (URLs, code) so they can't widen the bubble
+  // past the viewport.
+  overflowWrap: "anywhere" as const,
+  wordBreak: "break-word" as const,
 } as const;
 
 const role = {

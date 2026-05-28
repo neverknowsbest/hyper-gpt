@@ -7,10 +7,18 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
   background: Canvas;
   color: CanvasText;
+  /* Safety net: never let anything cause horizontal page scroll on mobile. */
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+#root {
+  min-height: 100dvh;
 }
 
 /* Citation highlights — rendered via the CSS Custom Highlight API so the

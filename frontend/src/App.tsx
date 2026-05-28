@@ -406,8 +406,11 @@ function CanvasTopBar({
 
 const desktopShell = {
   display: "grid",
-  gridTemplateColumns: "280px 1fr",
+  // minmax(0, 1fr) so the main pane can't be expanded past the viewport by
+  // wide content (default 1fr has an implicit min-width: auto = min-content).
+  gridTemplateColumns: "280px minmax(0, 1fr)",
   height: "100dvh",
+  overflowX: "hidden",
   fontFamily:
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
 } as const;
@@ -415,7 +418,9 @@ const desktopShell = {
 const mobileShell = {
   display: "grid",
   gridTemplateRows: "auto 1fr",
+  gridTemplateColumns: "minmax(0, 1fr)",
   height: "100dvh",
+  overflowX: "hidden",
   fontFamily:
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
 } as const;
@@ -486,7 +491,9 @@ const canvasItem = {
 const chatPane = {
   display: "grid",
   gridTemplateRows: "auto 1fr",
+  gridTemplateColumns: "minmax(0, 1fr)",
   minHeight: 0,
+  minWidth: 0,
   overflow: "hidden",
 } as const;
 
