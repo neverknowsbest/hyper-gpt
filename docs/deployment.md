@@ -136,7 +136,17 @@ Encrypt's HTTP challenge can't reach you.
 
 ## Updating the code
 
-After pushing changes to GitHub:
+After pushing changes to GitHub, deploy from your **laptop** (no login):
+
+```
+bash deploy/remote-deploy.sh
+```
+
+This resolves the instance (from the Elastic IP's `Name=hypergpt` tag),
+runs `update.sh` on it via SSM Run Command, waits, and prints the result.
+Needs an active SSO session (`aws sso login`).
+
+Or, the interactive way — open a session and run it on the box:
 
 ```
 aws ssm start-session --target <instance-id> --region us-east-1
@@ -144,11 +154,11 @@ aws ssm start-session --target <instance-id> --region us-east-1
 bash /home/ec2-user/hypergpt/deploy/update.sh
 ```
 
-SSM Session Manager lands you as `ssm-user`, but the repo and Bun install
-belong to `ec2-user`. `update.sh` detects this and re-execs its body as
-`ec2-user` automatically, so you can run it as-is. It does `git pull` →
-`bun install` → `bun run build` → restart the backend (migrations run on
-startup) → re-sync + reload Caddy.
+Either way, `update.sh` does `git pull` → `bun install` → `bun run build`
+→ restart the backend (migrations run on startup) → re-sync + reload Caddy.
+SSM Run Command and Session Manager both land as a non-`ec2-user`, but the
+repo and Bun install belong to `ec2-user` — `update.sh` re-execs its body
+as `ec2-user` automatically.
 
 ## Updating infra
 

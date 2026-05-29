@@ -11,7 +11,6 @@ if [ "$(id -un)" != "ec2-user" ]; then
   exec sudo -u ec2-user -H bash "$0" "$@"
 fi
 
-set -x
 REPO_DIR=/home/ec2-user/hypergpt
 BUN=/home/ec2-user/.bun/bin/bun
 
