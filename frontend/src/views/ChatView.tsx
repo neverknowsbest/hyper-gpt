@@ -5,6 +5,8 @@ import {
   useRef,
   useState,
 } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   getNode,
   messageText,
@@ -131,7 +133,12 @@ function offsetFromPoint(
   const pre = document.createRange();
   pre.selectNodeContents(container);
   pre.setEnd(caretNode, caretOffset);
-  return pre.toString().length;
+  // textContent of the cloned range = concatenated text-node chars (no
+  // synthetic block-boundary whitespace), which matches how rangeForOffsets
+  // walks text nodes. Critical once content is rendered markdown (block
+  // elements): keeps capture and highlight offsets in the same coordinate
+  // system. (.toString() would diverge by inserting block newlines.)
+  return (pre.cloneContents().textContent ?? "").length;
 }
 
 export function ChatView({
@@ -305,10 +312,13 @@ export function ChatView({
     const preRange = document.createRange();
     preRange.selectNodeContents(messageEl);
     preRange.setEnd(range.startContainer, range.startOffset);
-    const start = preRange.toString().length;
-    const text = range.toString();
-    if (!text.trim()) return null;
-    const end = start + text.length;
+    // Text-node-coordinate offsets (see offsetFromPoint) so capture and
+    // highlight rendering agree once the content is rendered markdown.
+    const start = (preRange.cloneContents().textContent ?? "").length;
+    const selectedTextNodes = (range.cloneContents().textContent ?? "").length;
+    const text = range.toString(); // readable snapshot for the citation
+    if (!text.trim() || selectedTextNodes === 0) return null;
+    const end = start + selectedTextNodes;
     return { messageId, start, end, text };
   }, []);
 
@@ -664,8 +674,6 @@ function MessageBubble({
     }
   };
 
-  const visibleText = text || (message.status === "streaming" ? "…" : "");
-
   return (
     <div
       style={{
@@ -681,10 +689,17 @@ function MessageBubble({
         ref={contentRef}
         data-message-id={message.id}
         onClick={handleClick}
-        style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
+        className="md"
+        style={{ overflowWrap: "anywhere" }}
       >
-        {visibleText}
-        {message.status === "streaming" && <span style={cursorStyle}> ▋</span>}
+        {text ? (
+          <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
+        ) : (
+          message.status === "streaming" && "…"
+        )}
+        {message.status === "streaming" && text && (
+          <span style={cursorStyle}> ▋</span>
+        )}
         {message.status === "errored" && (
           <span style={{ color: "crimson", userSelect: "none" }}>
             {" ⚠ errored"}

@@ -107,19 +107,6 @@ No way to edit a sent prompt or re-roll an assistant response.
 - **Why deferred:** v1 doesn't need it to test the branching hypothesis, and adding it raises model-history-correctness questions (do downstream nodes need re-running?).
 - **Keep the path open by:** messages being immutable append-only by default. A future "edit" feature creates a new message version; it doesn't mutate in place.
 
-### Markdown rendering in messages
-
-Assistant responses come back with markdown formatting (headings, lists, **bold**, *italics*, `code`, fenced code blocks, links). v1 renders them as plain text with `white-space: pre-wrap`, so the markup shows literally (`**bold**` instead of **bold**). Rendering it properly would make the chat feel like a real chat UI.
-
-- **Why deferred:** the v1 question is whether the UX is worth using. Plain text is legible; markdown is polish that doesn't change the core thesis. More importantly, **markdown rendering has a non-trivial interaction with the selection-to-spawn mechanic** and we don't want to redo that work twice.
-- **Keep the path open by:** the data model already stores raw text (`ContentPart { type: "text", text: string }`) — that text *is* the markdown source, exactly as the model emitted it. No schema change is needed. The rendering is purely a frontend concern.
-- **The hard part when we get here** — selecting inside a rendered markdown block has to produce character offsets *into the markdown source*, not into the rendered text. The current code computes offsets via `range.toString().length` against the message DOM, which assumes the rendered text matches the stored text. With markdown rendering, that's broken: `**bold**` renders as 4 visible chars but is 8 source chars. Options when we get to it:
-  - (a) Render markdown but keep a parallel data attribute on each rendered span recording the source-offset range it came from, then compute the selection range from those data attributes.
-  - (b) Use a markdown library that produces source-mapped output (some MDX/remark setups do this).
-  - (c) Have the user select inside a "show source" toggle that drops back to plain-text rendering for that bubble.
-- **Streaming considerations:** half-streamed markdown (`**bo`) looks broken until the closing tokens arrive. Either render with a tolerant parser that gracefully handles unclosed markup, or render the streaming portion as plain text and re-render as markdown on `message_complete`.
-- **Inline citation highlights** currently wrap character ranges in `<button>` elements inside the bubble. With markdown-rendered content split across multiple block elements (headings, code blocks, lists), inserting cross-element highlight spans is messy — likely needs the rendered output to be a flat sequence we can walk, or splitting highlights at block boundaries.
-
 ### Token usage and cost tracking
 
 Provider responses include a `usage` field with `input_tokens`, `output_tokens`, `cache_read_input_tokens`, and `cache_creation_input_tokens`. v1 ignores it. Capturing it would enable: verifying prompt-caching savings (currently invisible — we set the cache marker but don't measure the hit rate), per-canvas/per-conversation cost reporting in the UI, "this conversation has cost $X so far" affordances, and informed model-override decisions ("Sonnet is fine here, no need for Opus").
