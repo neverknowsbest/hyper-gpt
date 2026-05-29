@@ -12,7 +12,7 @@ Two CDK stacks:
   subnets only, **zero NAT gateways**), tagged `Name=hypergpt`. Separate
   stack because the network is rarely touched and should be cleanly
   reproducible / destroyable rather than relying on the account default VPC.
-- **HyperGptApp** — a `t4g.nano` (Amazon Linux 2023, ARM) in a public
+- **HyperGptApp** — a `t4g.micro` (Amazon Linux 2023, ARM) in a public
   subnet of that VPC, a 10 GB encrypted gp3 root volume, a security group
   (inbound 80/443 only — no SSH), an instance role with SSM Session Manager
   access + read on `/hypergpt/*` SSM params + scoped KMS decrypt, an Elastic

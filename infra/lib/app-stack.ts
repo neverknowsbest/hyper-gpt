@@ -76,9 +76,12 @@ export class AppStack extends Stack {
     const instance = new ec2.Instance(this, "Instance", {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      // micro (1 GB) not nano (0.5 GB): the only memory spike is the
+      // on-box vite build at deploy time, which OOMs on nano. Serving is
+      // tiny. Swap (from bootstrap.sh) stays as a safety margin.
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T4G,
-        ec2.InstanceSize.NANO,
+        ec2.InstanceSize.MICRO,
       ),
       machineImage: ec2.MachineImage.latestAmazonLinux2023({
         cpuType: ec2.AmazonLinuxCpuType.ARM_64,

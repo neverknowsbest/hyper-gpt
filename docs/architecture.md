@@ -33,7 +33,7 @@ There is no separate database server, no separate frontend server, no broker. On
 | Streaming protocol | **SSE** (Server-Sent Events) | Simpler than WebSockets for one-way server→client streams; reconnects natively; works through any HTTP proxy. |
 | TLS / reverse proxy | **Caddy** | Auto-issues Let's Encrypt certs, zero config beyond `host { reverse_proxy localhost:3000 }`. |
 | Process supervision | **systemd** | Boring, works. One unit file. |
-| Host | **AWS EC2 `t4g.nano`** (ARM/Graviton) | Cheap ($3/mo on-demand), comfortable territory, Litestream-to-S3 keeps backups in the same region for free. |
+| Host | **AWS EC2 `t4g.micro`** (ARM/Graviton) | ~$6/mo on-demand. Started on `t4g.nano` ($3/mo) but 512MB OOMs during the on-box vite build; micro's 1GB has headroom. Litestream-to-S3 keeps backups in the same region for free. |
 | PWA support | manifest.json + service worker | Installs to iOS home screen, opens fullscreen. No offline support in v1. |
 | Auth | **Single shared secret** in env var | One user, one secret, middleware checks header. Real auth is a future-features problem. |
 
@@ -118,9 +118,9 @@ While a message is streaming, the backend persists chunks to the SQLite row as t
 
 ## Deployment
 
-A single EC2 `t4g.nano` instance running Amazon Linux 2023 (or Ubuntu — either fine; Amazon Linux is the conventional pick if you want maximum AWS-shaped tooling).
+A single EC2 `t4g.micro` instance running Amazon Linux 2023 (or Ubuntu — either fine; Amazon Linux is the conventional pick if you want maximum AWS-shaped tooling).
 
-- **Instance:** `t4g.nano` (ARM Graviton, ~$3/month on-demand; cheaper reserved). Bun has first-class ARM support. Bump to `t4g.micro` if memory pressure shows up.
+- **Instance:** `t4g.micro` (ARM Graviton, 1GB, ~$6/month on-demand; cheaper reserved). Bun has first-class ARM support. Started on `t4g.nano` (0.5GB) but the on-box `vite build` OOM'd it; micro has the headroom. A 2GB swapfile (created in `bootstrap.sh`) stays as a safety margin.
 - **Storage:** ~10 GB `gp3` EBS volume (~$1/month). SQLite db lives at `/var/lib/hypergpt/prod.db`.
 - **Networking:** security group locked to inbound 80/443 from `0.0.0.0/0` and SSH (22) restricted to your IP (or use SSM Session Manager and close 22 entirely). No ALB — Caddy on the instance handles TLS termination directly.
 - **Static IP:** Elastic IP attached so the public address survives stop/start (~$3.60/month while in use).
