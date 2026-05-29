@@ -8,6 +8,16 @@ REPO_DIR=/home/ec2-user/hypergpt
 EC2_USER=ec2-user
 BUN=/home/ec2-user/.bun/bin/bun
 
+# --- Swap: t4g.nano has only 512MB RAM; the Vite build needs headroom or it
+# OOMs and wedges the box (SSM included). A 2GB swapfile covers it. ---
+if [ ! -f /swapfile ]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+  chmod 600 /swapfile
+  mkswap /swapfile >/dev/null
+  swapon /swapfile
+  grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 # --- Bun (installed into the ec2-user home) ---
 if [ ! -x "$BUN" ]; then
   sudo -u "$EC2_USER" bash -c 'curl -fsSL https://bun.sh/install | bash'
