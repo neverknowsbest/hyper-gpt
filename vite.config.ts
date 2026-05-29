@@ -30,10 +30,30 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Precache the build assets; SPA fallback for client routes. Never
-        // cache the API — those requests must always hit the network.
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api/],
+        // Network-first, not precache. We're always online and deploy often;
+        // a cache-first precache made deploys invisible until the SW updated
+        // (which Safari does sluggishly). Precache nothing; serve same-origin
+        // requests network-first so online always gets the latest build, with
+        // the cache only as an offline fallback. /api is left untouched so it
+        // always hits the network (SSE streaming included).
+        globPatterns: [],
+        // vite-plugin-pwa defaults this to index.html (SPA precache nav);
+        // null disables it so navigations go through the NetworkFirst route.
+        navigateFallback: null,
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) =>
+              url.origin === self.location.origin &&
+              !url.pathname.startsWith("/api"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "hypergpt-app",
+              networkTimeoutSeconds: 4, // fall back to cache if offline/slow
+              expiration: { maxEntries: 100 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
       // Keep the service worker out of dev so it doesn't fight HMR.
       devOptions: { enabled: false },
